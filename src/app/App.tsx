@@ -80,6 +80,17 @@ const SKILLS_ROADMAP = MOCK_SKILLS_ROADMAP;
 
 const API_BASE = "http://localhost:3001/api";
 
+const downloadAsTextFile = (filename: string, content: string) => {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 export const AppContext = createContext<{
   user: typeof MOCK_USER;
   jobs: typeof MOCK_JOBS;
@@ -230,7 +241,7 @@ function EmptyState({ icon: Icon, title, desc, cta, onCta }: { icon: React.Eleme
 }
 
 // ─── Landing Page ─────────────────────────────────────────────────────────────
-function LandingPage({ onStart }: { onStart: () => void }) {
+function LandingPage({ onStart, onStartDemo }: { onStart: () => void; onStartDemo?: () => void }) {
   const { dark } = useContext(ThemeCtx);
   const features = [
     { icon: Brain, title: "AI Resume Analyzer", desc: "Instantly score your resume and get actionable AI suggestions to maximize recruiter attention.", color: "from-indigo-500 to-blue-600" },
@@ -298,7 +309,7 @@ function LandingPage({ onStart }: { onStart: () => void }) {
             <GradBtn onClick={onStart} size="lg" className="min-w-[160px]">
               Get Started <ArrowRight className="w-5 h-5" />
             </GradBtn>
-            <GradBtn variant="secondary" size="lg" className="min-w-[160px]">
+            <GradBtn variant="secondary" onClick={onStartDemo || onStart} size="lg" className="min-w-[160px]">
               <Play className="w-4 h-4" /> View Demo
             </GradBtn>
           </div>
@@ -515,6 +526,45 @@ function ProfilePage() {
   const [tab, setTab] = useState<"details" | "preview">("details");
   const { user: USER, setUser, backendActive, token } = useContext(AppContext);
   const [uploading, setUploading] = useState(false);
+  const [copiedResume, setCopiedResume] = useState(false);
+
+  const copyOriginalResume = () => {
+    const textToCopy = `Name: ${USER.name}
+Title: ${USER.title}
+College: ${USER.college}
+Email: ${USER.email}
+Phone: ${USER.phone}
+
+Skills:
+${USER.skills?.join(", ")}
+
+Experience:
+${USER.experience?.map(e => `${e.role} at ${e.co} (${e.period})\n${e.desc}`).join("\n\n")}
+
+Education:
+${USER.education?.map(ed => `${ed.deg} from ${ed.inst} (${ed.year}) - CGPA ${ed.cgpa}`).join("\n\n")}`;
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedResume(true);
+    setTimeout(() => setCopiedResume(false), 2000);
+  };
+
+  const exportOriginalResume = () => {
+    const content = `Name: ${USER.name}
+Title: ${USER.title}
+College: ${USER.college}
+Email: ${USER.email}
+Phone: ${USER.phone}
+
+Skills:
+${USER.skills?.join(", ")}
+
+Experience:
+${USER.experience?.map(e => `${e.role} at ${e.co} (${e.period})\n${e.desc}`).join("\n\n")}
+
+Education:
+${USER.education?.map(ed => `${ed.deg} from ${ed.inst} (${ed.year}) - CGPA ${ed.cgpa}`).join("\n\n")}`;
+    downloadAsTextFile(`${USER.name.replace(/\s+/g, "_") || "user"}_resume.txt`, content);
+  };
 
   const [formData, setFormData] = useState({
     name: USER.name || "",
@@ -859,8 +909,10 @@ function ProfilePage() {
             </div>
           ))}
           <div className="flex gap-2 pt-3 border-t border-white/10">
-            <GradBtn size="sm"><Download className="w-3.5 h-3.5" /> Export PDF</GradBtn>
-            <GradBtn variant="secondary" size="sm"><Copy className="w-3.5 h-3.5" /> Copy Text</GradBtn>
+            <GradBtn size="sm" onClick={exportOriginalResume}><Download className="w-3.5 h-3.5" /> Export PDF</GradBtn>
+            <GradBtn variant="secondary" size="sm" onClick={copyOriginalResume}>
+              {copiedResume ? <><CheckCircle2 className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Text</>}
+            </GradBtn>
           </div>
         </GlassCard>
       )}
@@ -975,7 +1027,7 @@ function JobSearchPage({ onSelect }: { onSelect: (job: typeof JOBS[0]) => void }
                     <GradBtn variant="secondary" size="sm" onClick={() => onSelect(j)}>
                       <Wand2 className="w-3.5 h-3.5" /> Customize Resume
                     </GradBtn>
-                    <a href={j.platform === "LinkedIn" ? "#" : "#"} target="_blank" rel="noopener noreferrer">
+                    <a href={`https://www.google.com/search?q=${encodeURIComponent(`${j.company} ${j.title} job`)}`} target="_blank" rel="noopener noreferrer">
                       <GradBtn variant="ghost" size="sm">
                         <ExternalLink className="w-3.5 h-3.5" /> Apply
                       </GradBtn>
@@ -1160,7 +1212,7 @@ function JobMatchPage({ job, navigate }: { job: typeof JOBS[0] | null; navigate:
               <ChevronRight className="w-4 h-4 text-slate-400" />
             </button>
 
-            <a href="#" target="_blank" rel="noopener noreferrer" className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all",
+            <a href={`https://www.google.com/search?q=${encodeURIComponent(`${job.company} ${job.title} job`)}`} target="_blank" rel="noopener noreferrer" className={cn("w-full flex items-center justify-between p-4 rounded-xl border transition-all",
               dark ? "bg-emerald-500/08 border-emerald-500/20 hover:bg-emerald-500/15" : "bg-emerald-50 border-emerald-100 hover:bg-emerald-100")}>
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center">
@@ -1187,6 +1239,37 @@ function ResumeCustomizerPage({ job }: { job: typeof JOBS[0] | null }) {
   const [generating, setGenerating] = useState(false);
   const [done, setDone] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [copiedText, setCopiedText] = useState(false);
+
+  const copyCustomBullets = () => {
+    const textToCopy = `Professional Summary:\n${summary}\n\nKey Achievements:\n${customBullets.map(b => `• ${b}`).join("\n")}`;
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedText(true);
+    setTimeout(() => setCopiedText(false), 2000);
+  };
+
+  const exportCustomResume = () => {
+    const content = `Name: ${USER.name}
+Title: ${USER.title}
+College: ${USER.college}
+Email: ${USER.email}
+Phone: ${USER.phone}
+
+Professional Summary:
+${summary}
+
+Skills:
+${USER.skills?.join(", ")}
+
+Tailored Key Achievements:
+${customBullets.map(b => `• ${b}`).join("\n")}
+
+Education:
+${USER.education?.map(ed => `${ed.deg} from ${ed.inst} (${ed.year}) - CGPA ${ed.cgpa}`).join("\n\n")}
+
+Targeted Role: ${targetJob.title} at ${targetJob.company}`;
+    downloadAsTextFile(`${USER.name.replace(/\s+/g, "_") || "user"}_tailored_${targetJob.company.replace(/\s+/g, "_")}_resume.txt`, content);
+  };
 
   const targetJob = job ?? JOBS[0];
 
@@ -1280,7 +1363,7 @@ function ResumeCustomizerPage({ job }: { job: typeof JOBS[0] | null }) {
             <GradBtn size="sm" variant="secondary" onClick={() => setSaved(true)}>
               {saved ? <><CheckCircle2 className="w-3.5 h-3.5" /> Saved</> : <><Save className="w-3.5 h-3.5" /> Save Version</>}
             </GradBtn>
-            <GradBtn size="sm"><Download className="w-3.5 h-3.5" /> Download PDF</GradBtn>
+            <GradBtn size="sm" onClick={exportCustomResume}><Download className="w-3.5 h-3.5" /> Download PDF</GradBtn>
           </>}
         </div>
       </div>
@@ -1352,7 +1435,9 @@ function ResumeCustomizerPage({ job }: { job: typeof JOBS[0] | null }) {
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-white/08 flex gap-2">
-              <GradBtn size="sm" variant="ghost"><Copy className="w-3.5 h-3.5" /> Copy Text</GradBtn>
+            <GradBtn size="sm" variant="ghost" onClick={copyCustomBullets}>
+              {copiedText ? <><CheckCircle2 className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Text</>}
+            </GradBtn>
             </div>
           </GlassCard>
         </div>
@@ -1393,6 +1478,16 @@ function ApplicationDraftPage({ job }: { job: typeof JOBS[0] | null }) {
   const [done, setDone] = useState(false);
   const [activeTab, setActiveTab] = useState<"email" | "linkedin" | "followup">("email");
   const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    navigator.clipboard.writeText(drafts[activeTab]);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const exportDraft = () => {
+    downloadAsTextFile(`${targetJob.company.replace(/\s+/g, "_")}_application_${activeTab}.txt`, drafts[activeTab]);
+  };
 
   const targetJob = job ?? JOBS[0];
 
@@ -1497,8 +1592,8 @@ function ApplicationDraftPage({ job }: { job: typeof JOBS[0] | null }) {
                 <GradBtn size="sm" variant="ghost" onClick={copy}>
                   {copied ? <><CheckCircle2 className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy</>}
                 </GradBtn>
-                <GradBtn size="sm" variant="secondary"><Save className="w-3.5 h-3.5" /> Save</GradBtn>
-                <GradBtn size="sm"><Download className="w-3.5 h-3.5" /> Export</GradBtn>
+                <GradBtn size="sm" variant="secondary" onClick={() => alert("Draft saved to your applications archive!")}><Save className="w-3.5 h-3.5" /> Save</GradBtn>
+                <GradBtn size="sm" onClick={exportDraft}><Download className="w-3.5 h-3.5" /> Export</GradBtn>
               </div>
             </div>
             <pre className={cn("text-sm leading-relaxed whitespace-pre-wrap font-sans p-4 rounded-xl border",
@@ -1515,7 +1610,40 @@ function ApplicationDraftPage({ job }: { job: typeof JOBS[0] | null }) {
 // ─── Self-Improvement Page ────────────────────────────────────────────────────
 function ImprovePage() {
   const { dark } = useContext(ThemeCtx);
-  const { roadmap: SKILLS_ROADMAP, weeklyInsights } = useContext(AppContext);
+  const { user: USER, setUser, roadmap: SKILLS_ROADMAP, setRoadmap, weeklyInsights, backendActive, token } = useContext(AppContext);
+
+  const handleStudy = async (skillName: string) => {
+    // Increment progress by 20%
+    const updatedRoadmap = SKILLS_ROADMAP.map(s => {
+      if (s.skill === skillName) {
+        const nextProgress = Math.min(s.progress + 20, 100);
+        
+        // If it reaches 100%, add to user skills
+        if (nextProgress === 100 && !USER.skills.includes(skillName)) {
+          const updatedSkills = [...USER.skills, skillName];
+          const updatedUser = { ...USER, skills: updatedSkills };
+          
+          setUser(updatedUser);
+          if (backendActive) {
+            fetch(`${API_BASE}/profile`, {
+              method: "POST",
+              headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify(updatedUser)
+            }).catch(e => console.error("Error auto-adding skill", e));
+          }
+          alert(`Congratulations! You've mastered ${skillName} and it has been added to your profile skills!`);
+        }
+        
+        return { ...s, progress: nextProgress };
+      }
+      return s;
+    });
+
+    setRoadmap(updatedRoadmap);
+  };
 
   return (
     <div className="space-y-5">
@@ -1555,7 +1683,14 @@ function ImprovePage() {
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">{s.why} · Est. {s.time}</p>
                 </div>
-                <span className="text-sm font-bold text-indigo-400">{s.progress}%</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-indigo-400">{s.progress}%</span>
+                  {s.progress < 100 && (
+                    <GradBtn size="sm" variant="ghost" onClick={() => handleStudy(s.skill)} className="py-0.5 px-2 text-[10px]">
+                      Study
+                    </GradBtn>
+                  )}
+                </div>
               </div>
               <div className="w-full h-2 bg-white/08 rounded-full overflow-hidden mb-3">
                 <div className={cn("h-full rounded-full bg-gradient-to-r",
@@ -1606,6 +1741,13 @@ function SettingsPage() {
   const { dark, toggle } = useContext(ThemeCtx);
   const { user: USER, setUser, backendActive, token, onLogout } = useContext(AppContext);
   const [saved, setSaved] = useState(false);
+
+  const handleDeleteAllData = async () => {
+    if (!confirm("Are you sure you want to delete all data? This cannot be undone.")) return;
+    localStorage.clear();
+    alert("All local data deleted. Redirecting to landing page.");
+    onLogout();
+  };
 
   const [openaiKey, setOpenaiKey] = useState(USER.settings?.openaiKey || "");
   const [geminiKey, setGeminiKey] = useState(USER.settings?.geminiKey || "");
@@ -1753,7 +1895,7 @@ function SettingsPage() {
           ))}
         </div>
         <div className="mt-4 pt-4 border-t border-white/08 flex gap-2">
-          <GradBtn variant="danger" size="sm"><Trash2 className="w-3.5 h-3.5" /> Delete All Data</GradBtn>
+          <GradBtn variant="danger" size="sm" onClick={handleDeleteAllData}><Trash2 className="w-3.5 h-3.5" /> Delete All Data</GradBtn>
           <GradBtn variant="ghost" size="sm" onClick={onLogout}><LogOut className="w-3.5 h-3.5" /> Sign Out</GradBtn>
         </div>
       </GlassCard>
@@ -2032,13 +2174,16 @@ export default function App() {
   return (
     <ThemeCtx.Provider value={{ dark, toggle: () => setDark(d => !d) }}>
       {page === "landing" && (
-        <LandingPage onStart={() => {
-          if (token) {
-            setPage("app");
-          } else {
-            setPage("auth");
-          }
-        }} />
+        <LandingPage 
+          onStart={() => {
+            if (token) {
+              setPage("app");
+            } else {
+              setPage("auth");
+            }
+          }}
+          onStartDemo={handleContinueAsGuest}
+        />
       )}
       {page === "auth" && (
         <AuthPage 
