@@ -9,6 +9,7 @@ import {
   GraduationCap, Briefcase, Phone, AtSign, ChevronDown, Shield,
   BarChart2, PieChart, Layers, Lock, Eye, Trash2, LogOut,
 } from "lucide-react";
+import { AuthPage } from "./components/AuthPage";
 
 // ─── Theme Context ─────────────────────────────────────────────────────────────
 const ThemeCtx = createContext({ dark: true, toggle: () => {} });
@@ -89,6 +90,8 @@ export const AppContext = createContext<{
   setRoadmap: React.Dispatch<React.SetStateAction<typeof MOCK_SKILLS_ROADMAP>>;
   setWeeklyInsights: React.Dispatch<React.SetStateAction<string[]>>;
   backendActive: boolean;
+  token: string | null;
+  onLogout: () => void;
 }>({
   user: MOCK_USER,
   jobs: MOCK_JOBS,
@@ -98,7 +101,9 @@ export const AppContext = createContext<{
   setJobs: () => {},
   setRoadmap: () => {},
   setWeeklyInsights: () => {},
-  backendActive: false
+  backendActive: false,
+  token: null,
+  onLogout: () => {}
 });
 
 
@@ -508,7 +513,7 @@ function Dashboard({ navigate }: { navigate: (v: string) => void }) {
 function ProfilePage() {
   const { dark } = useContext(ThemeCtx);
   const [tab, setTab] = useState<"details" | "preview">("details");
-  const { user: USER, setUser, backendActive } = useContext(AppContext);
+  const { user: USER, setUser, backendActive, token } = useContext(AppContext);
   const [uploading, setUploading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -556,7 +561,8 @@ function ProfilePage() {
         method: "POST",
         body: form,
         headers: {
-          "x-gemini-key": USER.settings?.geminiKey || ""
+          "x-gemini-key": USER.settings?.geminiKey || "",
+          "Authorization": `Bearer ${token}`
         }
       });
       if (!response.ok) {
@@ -595,7 +601,10 @@ function ProfilePage() {
       try {
         const response = await fetch(`${API_BASE}/profile`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
           body: JSON.stringify(updatedUser)
         });
         if (response.ok) {
@@ -867,13 +876,17 @@ function JobSearchPage({ onSelect }: { onSelect: (job: typeof JOBS[0]) => void }
   const [filterRole, setFilterRole] = useState("");
   const [filterRemote, setFilterRemote] = useState("All");
   const [filterPlatform, setFilterPlatform] = useState("All");
-  const { jobs: JOBS, setJobs, backendActive } = useContext(AppContext);
+  const { jobs: JOBS, setJobs, backendActive, token } = useContext(AppContext);
 
   const doSearch = async () => {
     setLoading(true);
     if (backendActive) {
       try {
-        const response = await fetch(`${API_BASE}/jobs`);
+        const response = await fetch(`${API_BASE}/jobs`, {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
         if (response.ok) {
           const matchedJobs = await response.json();
           setJobs(matchedJobs);
@@ -981,7 +994,7 @@ function JobSearchPage({ onSelect }: { onSelect: (job: typeof JOBS[0]) => void }
 // ─── Job Match Analysis ───────────────────────────────────────────────────────
 function JobMatchPage({ job, navigate }: { job: typeof JOBS[0] | null; navigate: (v: string) => void }) {
   const { dark } = useContext(ThemeCtx);
-  const { backendActive } = useContext(AppContext);
+  const { backendActive, token } = useContext(AppContext);
   const [whyPoints, setWhyPoints] = useState<string[]>([]);
   const [improvements, setImprovements] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1006,7 +1019,10 @@ function JobMatchPage({ job, navigate }: { job: typeof JOBS[0] | null; navigate:
       setLoading(true);
       fetch(`${API_BASE}/jobs/analyze`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           jobTitle: job.title,
           company: job.company,
@@ -1167,7 +1183,7 @@ function JobMatchPage({ job, navigate }: { job: typeof JOBS[0] | null; navigate:
 // ─── Resume Customizer ────────────────────────────────────────────────────────
 function ResumeCustomizerPage({ job }: { job: typeof JOBS[0] | null }) {
   const { dark } = useContext(ThemeCtx);
-  const { user: USER, backendActive } = useContext(AppContext);
+  const { user: USER, backendActive, token } = useContext(AppContext);
   const [generating, setGenerating] = useState(false);
   const [done, setDone] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1213,7 +1229,8 @@ function ResumeCustomizerPage({ job }: { job: typeof JOBS[0] | null }) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-gemini-key": USER.settings?.geminiKey || ""
+            "x-gemini-key": USER.settings?.geminiKey || "",
+            "Authorization": `Bearer ${token}`
           },
           body: JSON.stringify({
             jobTitle: targetJob.title,
@@ -1371,7 +1388,7 @@ function ResumeCustomizerPage({ job }: { job: typeof JOBS[0] | null }) {
 // ─── Application Draft ────────────────────────────────────────────────────────
 function ApplicationDraftPage({ job }: { job: typeof JOBS[0] | null }) {
   const { dark } = useContext(ThemeCtx);
-  const { user: USER, backendActive } = useContext(AppContext);
+  const { user: USER, backendActive, token } = useContext(AppContext);
   const [generating, setGenerating] = useState(false);
   const [done, setDone] = useState(false);
   const [activeTab, setActiveTab] = useState<"email" | "linkedin" | "followup">("email");
@@ -1400,7 +1417,8 @@ function ApplicationDraftPage({ job }: { job: typeof JOBS[0] | null }) {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-gemini-key": USER.settings?.geminiKey || ""
+            "x-gemini-key": USER.settings?.geminiKey || "",
+            "Authorization": `Bearer ${token}`
           },
           body: JSON.stringify({
             jobTitle: targetJob.title,
@@ -1586,7 +1604,7 @@ function ImprovePage() {
 // ─── Settings Page ────────────────────────────────────────────────────────────
 function SettingsPage() {
   const { dark, toggle } = useContext(ThemeCtx);
-  const { user: USER, setUser, backendActive } = useContext(AppContext);
+  const { user: USER, setUser, backendActive, token, onLogout } = useContext(AppContext);
   const [saved, setSaved] = useState(false);
 
   const [openaiKey, setOpenaiKey] = useState(USER.settings?.openaiKey || "");
@@ -1626,7 +1644,10 @@ function SettingsPage() {
       try {
         const response = await fetch(`${API_BASE}/profile`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
           body: JSON.stringify(updatedUser)
         });
         if (response.ok) {
@@ -1733,7 +1754,7 @@ function SettingsPage() {
         </div>
         <div className="mt-4 pt-4 border-t border-white/08 flex gap-2">
           <GradBtn variant="danger" size="sm"><Trash2 className="w-3.5 h-3.5" /> Delete All Data</GradBtn>
-          <GradBtn variant="ghost" size="sm"><LogOut className="w-3.5 h-3.5" /> Sign Out</GradBtn>
+          <GradBtn variant="ghost" size="sm" onClick={onLogout}><LogOut className="w-3.5 h-3.5" /> Sign Out</GradBtn>
         </div>
       </GlassCard>
 
@@ -1756,7 +1777,7 @@ const NAV_ITEMS = [
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
-function AppShell({ onLanding }: { onLanding: () => void }) {
+function AppShell({ onLanding, token, guestMode, onLogout }: { onLanding: () => void; token: string | null; guestMode: boolean; onLogout: () => void }) {
   const { dark } = useContext(ThemeCtx);
   const [view, setView] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1771,26 +1792,47 @@ function AppShell({ onLanding }: { onLanding: () => void }) {
   const [backendActive, setBackendActive] = useState(false);
 
   useEffect(() => {
+    if (guestMode) {
+      console.log("Guest mode active: bypassing backend fetch.");
+      setBackendActive(false);
+      setUser(MOCK_USER);
+      setJobs(MOCK_JOBS);
+      setRoadmap(MOCK_SKILLS_ROADMAP);
+      setWeeklyInsights(MOCK_WEEKLY_INSIGHTS);
+      return;
+    }
+
     const initFetch = async () => {
       try {
-        const profileRes = await fetch(`${API_BASE}/profile`);
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        const profileRes = await fetch(`${API_BASE}/profile`, { headers });
+        if (profileRes.status === 401) {
+          onLogout();
+          return;
+        }
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           setUser(profileData);
           setBackendActive(true);
 
-          const jobsRes = await fetch(`${API_BASE}/jobs`);
+          const jobsRes = await fetch(`${API_BASE}/jobs`, { headers });
           if (jobsRes.ok) {
             const jobsData = await jobsRes.json();
             setJobs(jobsData);
           }
 
-          const improveRes = await fetch(`${API_BASE}/improve/roadmap`);
+          const improveRes = await fetch(`${API_BASE}/improve/roadmap`, { headers });
           if (improveRes.ok) {
             const improveData = await improveRes.json();
             setRoadmap(improveData.roadmap);
             setWeeklyInsights(improveData.weeklyInsights);
           }
+        } else {
+          setBackendActive(false);
         }
       } catch (e) {
         console.log("Backend offline, running in mock fallback mode.");
@@ -1798,7 +1840,7 @@ function AppShell({ onLanding }: { onLanding: () => void }) {
       }
     };
     initFetch();
-  }, []);
+  }, [token, guestMode]);
 
   const USER = user;
   const JOBS = jobs;
@@ -1830,7 +1872,7 @@ function AppShell({ onLanding }: { onLanding: () => void }) {
   };
 
   return (
-    <AppContext.Provider value={{ user, jobs, roadmap, weeklyInsights, setUser, setJobs, setRoadmap, setWeeklyInsights, backendActive }}>
+    <AppContext.Provider value={{ user, jobs, roadmap, weeklyInsights, setUser, setJobs, setRoadmap, setWeeklyInsights, backendActive, token, onLogout }}>
       <div className={cn("min-h-screen flex flex-col", bg)} style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
         {/* Top Bar */}
         <header className={cn("sticky top-0 z-40 border-b backdrop-blur-xl flex-shrink-0",
@@ -1956,7 +1998,9 @@ function AppShell({ onLanding }: { onLanding: () => void }) {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [dark, setDark] = useState(true);
-  const [page, setPage] = useState<"landing" | "app">("landing");
+  const [page, setPage] = useState<"landing" | "auth" | "app">("landing");
+  const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
+  const [guestMode, setGuestMode] = useState<boolean>(false);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--background", dark ? "#070d1f" : "#f8fafc");
@@ -1966,12 +2010,51 @@ export default function App() {
     document.documentElement.style.setProperty("--muted-foreground", dark ? "#64748b" : "#6b7280");
   }, [dark]);
 
+  const handleLogin = (jwtToken: string) => {
+    localStorage.setItem("token", jwtToken);
+    setToken(jwtToken);
+    setGuestMode(false);
+    setPage("app");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setGuestMode(false);
+    setPage("landing");
+  };
+
+  const handleContinueAsGuest = () => {
+    setGuestMode(true);
+    setPage("app");
+  };
+
   return (
     <ThemeCtx.Provider value={{ dark, toggle: () => setDark(d => !d) }}>
-      {page === "landing"
-        ? <LandingPage onStart={() => setPage("app")} />
-        : <AppShell onLanding={() => setPage("landing")} />
-      }
+      {page === "landing" && (
+        <LandingPage onStart={() => {
+          if (token) {
+            setPage("app");
+          } else {
+            setPage("auth");
+          }
+        }} />
+      )}
+      {page === "auth" && (
+        <AuthPage 
+          onLogin={handleLogin} 
+          onContinueAsGuest={handleContinueAsGuest} 
+          apiBase={API_BASE} 
+        />
+      )}
+      {page === "app" && (
+        <AppShell 
+          onLanding={() => setPage("landing")} 
+          token={token} 
+          guestMode={guestMode} 
+          onLogout={handleLogout} 
+        />
+      )}
     </ThemeCtx.Provider>
   );
 }

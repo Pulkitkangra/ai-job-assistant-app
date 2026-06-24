@@ -6,6 +6,7 @@ import pdfParse from 'pdf-parse';
 import { DbService } from './services/db.js';
 import { AiService } from './services/ai.js';
 import { JobService } from './services/jobs.js';
+import authRouter, { authMiddleware, AuthenticatedRequest } from './routes/auth.js';
 
 dotenv.config();
 
@@ -26,27 +27,33 @@ const getApiKey = (req: express.Request): string | undefined => {
   return undefined;
 };
 
+// ─── Auth Router ─────────────────────────────────────────────────────────────
+app.use('/api/auth', authRouter);
+
 // ─── Profile Routes ──────────────────────────────────────────────────────────
 
-app.get('/api/profile', (req, res) => {
+app.get('/api/profile', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    const profile = DbService.getProfile();
+    const profile = await DbService.getProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
     res.json(profile);
   } catch (e) {
     res.status(500).json({ error: "Failed to read profile" });
   }
 });
 
-app.post('/api/profile', (req, res) => {
+app.post('/api/profile', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    const updated = DbService.saveProfile(req.body);
+    const updated = await DbService.saveProfile(req.user!.id, req.body);
     res.json(updated);
   } catch (e) {
     res.status(500).json({ error: "Failed to save profile" });
   }
 });
 
-app.post('/api/profile/upload', upload.single('resume'), async (req, res) => {
+app.post('/api/profile/upload', authMiddleware, upload.single('resume'), async (req: AuthenticatedRequest, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
@@ -64,7 +71,7 @@ app.post('/api/profile/upload', upload.single('resume'), async (req, res) => {
     const parsedProfile = await AiService.parseResumeText(resumeText, apiKey);
     
     // Save to DB as the current profile
-    const saved = DbService.saveProfile(parsedProfile);
+    const saved = await DbService.saveProfile(req.user!.id, parsedProfile);
     res.json(saved);
   } catch (e: any) {
     console.error("Resume upload/parsing error:", e);
@@ -74,9 +81,12 @@ app.post('/api/profile/upload', upload.single('resume'), async (req, res) => {
 
 // ─── Job Routes ──────────────────────────────────────────────────────────────
 
-app.get('/api/jobs', (req, res) => {
+app.get('/api/jobs', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    const profile = DbService.getProfile();
+    const profile = await DbService.getProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
     const jobs = JobService.getMatchedJobs(profile.skills, profile.prefs);
     res.json(jobs);
   } catch (e) {
@@ -84,10 +94,13 @@ app.get('/api/jobs', (req, res) => {
   }
 });
 
-app.post('/api/jobs/analyze', async (req, res) => {
+app.post('/api/jobs/analyze', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const { jobTitle, company, skills, missing } = req.body;
-    const profile = DbService.getProfile();
+    const profile = await DbService.getProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
 
     const matchedCount = skills.length;
     const totalCount = skills.length + missing.length;
@@ -119,10 +132,13 @@ app.post('/api/jobs/analyze', async (req, res) => {
 
 // ─── Resume Customizer ───────────────────────────────────────────────────────
 
-app.post('/api/resume/customize', async (req, res) => {
+app.post('/api/resume/customize', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const { jobTitle, company, jobDesc } = req.body;
-    const profile = DbService.getProfile();
+    const profile = await DbService.getProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
     const apiKey = getApiKey(req);
 
     // Format experience details for the AI prompt
@@ -140,10 +156,13 @@ app.post('/api/resume/customize', async (req, res) => {
 
 // ─── Application Drafts ──────────────────────────────────────────────────────
 
-app.post('/api/drafts/generate', async (req, res) => {
+app.post('/api/drafts/generate', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const { jobTitle, company, jobDesc } = req.body;
-    const profile = DbService.getProfile();
+    const profile = await DbService.getProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
     const apiKey = getApiKey(req);
 
     const drafts = await AiService.generateDrafts(jobTitle, company, jobDesc, profile, apiKey);
@@ -156,9 +175,12 @@ app.post('/api/drafts/generate', async (req, res) => {
 
 // ─── Self Improvement Roadmap ───────────────────────────────────────────────
 
-app.get('/api/improve/roadmap', (req, res) => {
+app.get('/api/improve/roadmap', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    const profile = DbService.getProfile();
+    const profile = await DbService.getProfile(req.user!.id);
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
     const jobs = JobService.getMatchedJobs(profile.skills, profile.prefs);
     const roadmap = JobService.getSkillsRoadmap(profile.skills, jobs);
     
@@ -178,6 +200,11 @@ app.get('/api/improve/roadmap', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Initialize database then start server
+DbService.init().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}).catch(err => {
+  console.error("Failed to initialize database:", err);
 });

@@ -8,7 +8,7 @@ build/
 server/dist/
 
 # local database files
-server/data/db.json
+server/data/
 
 # environment variables
 .env
