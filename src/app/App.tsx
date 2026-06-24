@@ -16,8 +16,8 @@ const ThemeCtx = createContext({ dark: true, toggle: () => {} });
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const MOCK_USER = {
-  name: "Priya Kapoor", title: "B.Tech CSE · 3rd Year", college: "BITS Pilani",
-  email: "priya.kapoor@bits.ac.in", phone: "+91 98765 43210",
+  name: "Pulkit Kangra", title: "B.Tech CSE · 3rd Year", college: "BITS Pilani",
+  email: "pulkit.kangra@bits.ac.in", phone: "+91 98765 43210",
   avatar: "PK", completion: 82,
   skills: ["Python", "React", "Node.js", "Machine Learning", "TypeScript", "PostgreSQL", "FastAPI", "Docker"],
   experience: [
@@ -895,7 +895,7 @@ ${USER.education?.map(ed => `${ed.deg} from ${ed.inst} (${ed.year}) - CGPA ${ed.
             <div className="flex flex-wrap gap-3 mt-2 text-xs text-slate-400">
               <span className="flex items-center gap-1"><AtSign className="w-3 h-3" />{USER.email}</span>
               <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{USER.phone}</span>
-              <span className="flex items-center gap-1"><Globe className="w-3 h-3" />github.com/priyakapoor</span>
+              <span className="flex items-center gap-1"><Globe className="w-3 h-3" />github.com/pulkitkangra</span>
             </div>
           </div>
           {[
@@ -1501,9 +1501,9 @@ function ApplicationDraftPage({ job }: { job: typeof JOBS[0] | null }) {
     setGenerating(true);
 
     const fallbacks = {
-      email: `Subject: Application for ${targetJob.title} — Priya Kapoor, BITS Pilani (9.1 CGPA)\n\nDear Hiring Team,\n\nI am writing to express my keen interest in the ${targetJob.title} position at ${targetJob.company}. As a third-year Computer Science student at BITS Pilani with a CGPA of 9.1, I bring hands-on experience in ${targetJob.skills.join(", ")} through my internship at Meesho and research at IISc Bangalore.\n\nAt Meesho, I built a seller analytics dashboard that reduced page load time by 40% for 150K+ daily active users. My research at IISc involved fine-tuning BERT achieving 93% F1 — directly applicable to ${targetJob.company}'s engineering challenges.\n\nI am excited by ${targetJob.company}'s mission in ${targetJob.sector} and believe my technical background and ownership mindset align well with your team's culture.\n\nI would love to discuss how I can contribute. Please find my resume attached.\n\nWarm regards,\nPriya Kapoor\n+91 98765 43210 | priya.kapoor@bits.ac.in | github.com/priyakapoor`,
-      linkedin: `Hi [Recruiter Name],\n\nI came across the ${targetJob.title} role at ${targetJob.company} and I'm very excited about the opportunity. I'm a 3rd-year CSE student at BITS Pilani (9.1 CGPA) with production experience in ${targetJob.skills[0]} and ${targetJob.skills[1] ?? "backend systems"} from my internship at Meesho.\n\nI'd love to connect and learn more about the role. Would you be open to a quick chat?\n\nThanks, Priya`,
-      followup: `Subject: Follow-up: ${targetJob.title} Application — Priya Kapoor\n\nDear [Name],\n\nI wanted to follow up on my application for the ${targetJob.title} position submitted last week. I remain very enthusiastic about joining ${targetJob.company} and contributing to your ${targetJob.sector} initiatives.\n\nI'm happy to provide any additional information or schedule a call at your convenience.\n\nBest regards, Priya Kapoor`
+      email: `Subject: Application for ${targetJob.title} — Pulkit Kangra, BITS Pilani (9.1 CGPA)\n\nDear Hiring Team,\n\nI am writing to express my keen interest in the ${targetJob.title} position at ${targetJob.company}. As a third-year Computer Science student at BITS Pilani with a CGPA of 9.1, I bring hands-on experience in ${targetJob.skills.join(", ")} through my internship at Meesho and research at IISc Bangalore.\n\nAt Meesho, I built a seller analytics dashboard that reduced page load time by 40% for 150K+ daily active users. My research at IISc involved fine-tuning BERT achieving 93% F1 — directly applicable to ${targetJob.company}'s engineering challenges.\n\nI am excited by ${targetJob.company}'s mission in ${targetJob.sector} and believe my technical background and ownership mindset align well with your team's culture.\n\nI would love to discuss how I can contribute. Please find my resume attached.\n\nWarm regards,\nPulkit Kangra\n+91 98765 43210 | pulkit.kangra@bits.ac.in | github.com/pulkitkangra`,
+      linkedin: `Hi [Recruiter Name],\n\nI came across the ${targetJob.title} role at ${targetJob.company} and I'm very excited about the opportunity. I'm a 3rd-year CSE student at BITS Pilani (9.1 CGPA) with production experience in ${targetJob.skills[0]} and ${targetJob.skills[1] ?? "backend systems"} from my internship at Meesho.\n\nI'd love to connect and learn more about the role. Would you be open to a quick chat?\n\nThanks, Pulkit`,
+      followup: `Subject: Follow-up: ${targetJob.title} Application — Pulkit Kangra\n\nDear [Name],\n\nI wanted to follow up on my application for the ${targetJob.title} position submitted last week. I remain very enthusiastic about joining ${targetJob.company} and contributing to your ${targetJob.sector} initiatives.\n\nI'm happy to provide any additional information or schedule a call at your convenience.\n\nBest regards, Pulkit Kangra`
     };
 
     if (backendActive) {
