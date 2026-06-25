@@ -124,6 +124,11 @@ function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(" ");
 }
 
+const inputCls = (dark: boolean) => cn(
+  "w-full px-3 py-2 rounded-xl text-sm border outline-none transition-colors focus:ring-2 focus:ring-indigo-500/40",
+  dark ? "bg-white/05 border-white/10 text-white placeholder:text-slate-500" : "bg-gray-50 border-gray-200 text-gray-900"
+);
+
 function GlassCard({ children, className = "", hover = false }: { children: React.ReactNode; className?: string; hover?: boolean }) {
   const { dark } = useContext(ThemeCtx);
   return (
@@ -1240,6 +1245,10 @@ function ResumeCustomizerPage({ job }: { job: typeof JOBS[0] | null }) {
   const [done, setDone] = useState(false);
   const [saved, setSaved] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSaved, setFeedbackSaved] = useState(false);
+
+  const inpCls = inputCls(dark);
 
   const copyCustomBullets = () => {
     const textToCopy = `Professional Summary:\n${summary}\n\nKey Achievements:\n${customBullets.map(b => `• ${b}`).join("\n")}`;
@@ -1283,7 +1292,6 @@ Targeted Role: ${targetJob.title} at ${targetJob.company}`;
   });
 
   useEffect(() => {
-    // Populate original bullets from user experience
     if (USER.experience && USER.experience.length > 0) {
       setOriginalBullets(USER.experience.map((e: any) => e.desc));
     } else {
@@ -1354,6 +1362,67 @@ Targeted Role: ${targetJob.title} at ${targetJob.company}`;
     }
   };
 
+  const handleUpdateWithFeedback = async () => {
+    if (!feedbackText.trim()) return;
+
+    if (backendActive) {
+      try {
+        setGenerating(true);
+        const feedbackResponse = await fetch(`${API_BASE}/settings/feedback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ feedback: feedbackText })
+        });
+
+        const response = await fetch(`${API_BASE}/resume/customize`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-gemini-key": USER.settings?.geminiKey || "",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            jobTitle: targetJob.title,
+            company: targetJob.company,
+            jobDesc: targetJob.desc
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCustomBullets(data.customBullets);
+          setSummary(data.summary);
+          if (data.changesSummary) {
+            setChangesSummary({
+              bulletsEnhanced: data.changesSummary.bulletsEnhanced,
+              keywordsAdded: data.changesSummary.keywordsAdded,
+              scoreImprovement: String(data.changesSummary.scoreImprovement).includes('%') ? data.changesSummary.scoreImprovement : `+${data.changesSummary.scoreImprovement}%`
+            });
+          }
+          setDone(true);
+          setFeedbackText("");
+          setFeedbackSaved(true);
+          setTimeout(() => setFeedbackSaved(false), 3000);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setGenerating(false);
+      }
+    } else {
+      setGenerating(true);
+      setTimeout(() => {
+        setGenerating(false);
+        setFeedbackText("");
+        setFeedbackSaved(true);
+        setTimeout(() => setFeedbackSaved(false), 3000);
+      }, 1500);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1385,7 +1454,6 @@ Targeted Role: ${targetJob.title} at ${targetJob.company}`;
 
       {done && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Original */}
           <GlassCard className="p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-slate-400">Original Resume</h3>
@@ -1409,7 +1477,6 @@ Targeted Role: ${targetJob.title} at ${targetJob.company}`;
             </div>
           </GlassCard>
 
-          {/* Customized */}
           <GlassCard className="p-5 border-indigo-500/25">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-white">AI-Customized</h3>
@@ -1435,15 +1502,41 @@ Targeted Role: ${targetJob.title} at ${targetJob.company}`;
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-white/08 flex gap-2">
-            <GradBtn size="sm" variant="ghost" onClick={copyCustomBullets}>
-              {copiedText ? <><CheckCircle2 className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Text</>}
-            </GradBtn>
+              <GradBtn size="sm" variant="ghost" onClick={copyCustomBullets}>
+                {copiedText ? <><CheckCircle2 className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy Text</>}
+              </GradBtn>
             </div>
           </GlassCard>
         </div>
       )}
 
-      {/* Changes summary */}
+      {done && (
+        <GlassCard className="p-5 border border-indigo-500/10">
+          <h3 className={cn("font-semibold mb-2 flex items-center gap-2", dark ? "text-white" : "text-gray-900")}>
+            <Brain className="w-4 h-4 text-emerald-400" />
+            AI Chatbot Feedback Loop & Dynamic Learning
+          </h3>
+          <p className="text-xs text-slate-400 mb-3">
+            Type corrections below (e.g. *"sound more technical"*, *"avoid marketing keywords"*, *"highlight my leadership skill"*). The AI will save this in its memory and instantly adapt the output.
+          </p>
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              value={feedbackText} 
+              onChange={e => setFeedbackText(e.target.value)} 
+              className={inpCls} 
+              placeholder="e.g. Highlight my Docker experience more, write it in 3 bullets..." 
+              disabled={generating}
+            />
+            <GradBtn onClick={handleUpdateWithFeedback} disabled={generating || !feedbackText.trim()}>
+              {generating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              Update & Learn
+            </GradBtn>
+          </div>
+          {feedbackSaved && <p className="text-xs text-emerald-400 mt-1.5 font-medium">✓ AI learned from your correction and regenerated output!</p>}
+        </GlassCard>
+      )}
+
       {done && (
         <GlassCard className="p-5">
           <h3 className={cn("font-semibold mb-3", dark ? "text-white" : "text-gray-900")}>Changes Made by AI</h3>
@@ -1478,6 +1571,10 @@ function ApplicationDraftPage({ job }: { job: typeof JOBS[0] | null }) {
   const [done, setDone] = useState(false);
   const [activeTab, setActiveTab] = useState<"email" | "linkedin" | "followup">("email");
   const [copied, setCopied] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSaved, setFeedbackSaved] = useState(false);
+
+  const inpCls = inputCls(dark);
 
   const copy = () => {
     navigator.clipboard.writeText(drafts[activeTab]);
@@ -1544,6 +1641,59 @@ function ApplicationDraftPage({ job }: { job: typeof JOBS[0] | null }) {
     }
   };
 
+  const handleUpdateWithFeedback = async () => {
+    if (!feedbackText.trim()) return;
+
+    if (backendActive) {
+      try {
+        setGenerating(true);
+        const feedbackResponse = await fetch(`${API_BASE}/settings/feedback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ feedback: feedbackText })
+        });
+
+        const response = await fetch(`${API_BASE}/drafts/generate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-gemini-key": USER.settings?.geminiKey || "",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            jobTitle: targetJob.title,
+            company: targetJob.company,
+            jobDesc: targetJob.desc
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setDrafts(data);
+          setDone(true);
+          setFeedbackText("");
+          setFeedbackSaved(true);
+          setTimeout(() => setFeedbackSaved(false), 3000);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setGenerating(false);
+      }
+    } else {
+      setGenerating(true);
+      setTimeout(() => {
+        setGenerating(false);
+        setFeedbackText("");
+        setFeedbackSaved(true);
+        setTimeout(() => setFeedbackSaved(false), 3000);
+      }, 1500);
+    }
+  };
+
   const tabs = [
     { key: "email" as const, label: "Email Draft", icon: Mail },
     { key: "linkedin" as const, label: "LinkedIn Message", icon: Globe },
@@ -1600,6 +1750,31 @@ function ApplicationDraftPage({ job }: { job: typeof JOBS[0] | null }) {
               dark ? "bg-white/03 border-white/08 text-slate-300" : "bg-gray-50 border-gray-200 text-gray-700")}>
               {drafts[activeTab]}
             </pre>
+          </GlassCard>
+
+          <GlassCard className="p-5 border border-indigo-500/10">
+            <h3 className={cn("font-semibold mb-2 flex items-center gap-2", dark ? "text-white" : "text-gray-900")}>
+              <Brain className="w-4 h-4 text-emerald-400" />
+              AI Chatbot Feedback Loop & Dynamic Learning
+            </h3>
+            <p className="text-xs text-slate-400 mb-3">
+              Type corrections below (e.g. *"make it shorter"*, *"write in first-person"*, *"sound more enthusiastic"*). The AI will save this in its memory and instantly adapt the output.
+            </p>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={feedbackText} 
+                onChange={e => setFeedbackText(e.target.value)} 
+                className={inpCls} 
+                placeholder="e.g. Make it more professional, highlight my frontend skills..." 
+                disabled={generating}
+              />
+              <GradBtn onClick={handleUpdateWithFeedback} disabled={generating || !feedbackText.trim()}>
+                {generating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                Update & Learn
+              </GradBtn>
+            </div>
+            {feedbackSaved && <p className="text-xs text-emerald-400 mt-1.5 font-medium">✓ AI learned from your correction and regenerated output!</p>}
           </GlassCard>
         </>
       )}
@@ -1752,6 +1927,8 @@ function SettingsPage() {
   const [openaiKey, setOpenaiKey] = useState(USER.settings?.openaiKey || "");
   const [geminiKey, setGeminiKey] = useState(USER.settings?.geminiKey || "");
   const [linkedinKey, setLinkedinKey] = useState(USER.settings?.linkedinKey || "");
+  const [aiInstructions, setAiInstructions] = useState(USER.settings?.aiInstructions || "Be concise, professional, and focus on practical engineering achievements. Quantify impacts where possible.");
+  const [aiFeedbackHistory, setAiFeedbackHistory] = useState<string[]>(USER.settings?.aiFeedbackHistory || []);
 
   const [platforms, setPlatforms] = useState(USER.settings?.platforms || {
     "LinkedIn": true,
@@ -1776,7 +1953,9 @@ function SettingsPage() {
         geminiKey,
         linkedinKey,
         platforms,
-        privacy
+        privacy,
+        aiInstructions,
+        aiFeedbackHistory
       }
     };
 
@@ -1795,6 +1974,7 @@ function SettingsPage() {
         if (response.ok) {
           const savedData = await response.json();
           setUser(savedData);
+          setAiFeedbackHistory(savedData.settings?.aiFeedbackHistory || []);
         }
       } catch (e) {
         console.error(e);
@@ -1805,8 +1985,7 @@ function SettingsPage() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const inputCls = cn("w-full px-3 py-2 rounded-xl text-sm border outline-none transition-colors focus:ring-2 focus:ring-indigo-500/40",
-    dark ? "bg-white/05 border-white/10 text-white placeholder:text-slate-500" : "bg-gray-50 border-gray-200 text-gray-900");
+  const inpCls = inputCls(dark);
   const labelCls = cn("block text-xs font-semibold mb-1.5 uppercase tracking-widest", dark ? "text-slate-400" : "text-gray-500");
 
   return (
@@ -1832,6 +2011,56 @@ function SettingsPage() {
         </div>
       </GlassCard>
 
+      {/* AI Persona & Memory */}
+      <GlassCard className="p-5">
+        <h3 className={cn("font-semibold mb-4 flex items-center gap-2", dark ? "text-white" : "text-gray-900")}>
+          <Brain className="w-4 h-4 text-emerald-400" />
+          AI Persona & Memory (Dynamic Learning)
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label className={labelCls}>Custom Personality & Style Instructions</label>
+            <textarea 
+              value={aiInstructions} 
+              onChange={e => setAiInstructions(e.target.value)} 
+              className={cn(inpCls, "h-20 resize-none")} 
+              placeholder="e.g. Write cover letters in a friendly tone. My resume should focus on cloud technologies." 
+            />
+            <p className="text-xs text-slate-500 mt-1">These instructions steer the AI's default tone and content customization.</p>
+          </div>
+
+          <div>
+            <label className={labelCls}>Active Memory (Learned Corrections)</label>
+            {aiFeedbackHistory.length === 0 ? (
+              <p className="text-xs text-slate-500 italic p-3 border border-dashed rounded-xl border-white/10">No learned behaviors yet. The AI will learn from corrections you type when generating custom resumes and cover letters.</p>
+            ) : (
+              <div className="space-y-2">
+                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                  {aiFeedbackHistory.map((feedback, idx) => (
+                    <div key={idx} className={cn("flex items-center justify-between text-xs p-2 rounded-lg border",
+                      dark ? "bg-white/03 border-white/05" : "bg-gray-50 border-gray-100")}>
+                      <span className={cn("truncate mr-2", dark ? "text-slate-300" : "text-gray-700")}>"{feedback}"</span>
+                      <button 
+                        onClick={() => {
+                          const updated = aiFeedbackHistory.filter((_, i) => i !== idx);
+                          setAiFeedbackHistory(updated);
+                        }} 
+                        className="text-red-400 hover:text-red-300 p-0.5"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <GradBtn size="sm" variant="ghost" onClick={() => setAiFeedbackHistory([])} className="text-xs">
+                  Clear All Learned Memories
+                </GradBtn>
+              </div>
+            )}
+          </div>
+        </div>
+      </GlassCard>
+
       {/* API Configuration */}
       <GlassCard className="p-5">
         <h3 className={cn("font-semibold mb-4 flex items-center gap-2", dark ? "text-white" : "text-gray-900")}>
@@ -1841,15 +2070,15 @@ function SettingsPage() {
         <div className="space-y-4">
           <div>
             <label className={labelCls}>Gemini API Key</label>
-            <input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} className={inputCls} placeholder="Enter Gemini API key (recommended)" />
+            <input type="password" value={geminiKey} onChange={e => setGeminiKey(e.target.value)} className={inpCls} placeholder="Enter Gemini API key (recommended)" />
           </div>
           <div>
             <label className={labelCls}>OpenAI API Key</label>
-            <input type="password" value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} className={inputCls} placeholder="sk-..." />
+            <input type="password" value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} className={inpCls} placeholder="sk-..." />
           </div>
           <div>
             <label className={labelCls}>LinkedIn API Key</label>
-            <input type="password" value={linkedinKey} onChange={e => setLinkedinKey(e.target.value)} className={inputCls} placeholder="Enter LinkedIn API key" />
+            <input type="password" value={linkedinKey} onChange={e => setLinkedinKey(e.target.value)} className={inpCls} placeholder="Enter LinkedIn API key" />
           </div>
         </div>
       </GlassCard>

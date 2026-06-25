@@ -30,6 +30,8 @@ const DEFAULT_SETTINGS = {
   openaiKey: "",
   geminiKey: "",
   linkedinKey: "",
+  aiInstructions: "Be concise, professional, and focus on practical engineering achievements. Quantify impacts where possible.",
+  aiFeedbackHistory: [] as string[],
   platforms: {
     "LinkedIn": true,
     "Naukri": true,
@@ -91,9 +93,19 @@ export class DbService {
         linkedinKey TEXT,
         platforms TEXT, -- JSON object
         privacy TEXT, -- JSON object
+        aiInstructions TEXT,
+        aiFeedbackHistory TEXT,
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
       );
     `);
+
+    // Safe DB upgrade/migrations for existing tables
+    try {
+      await db.exec("ALTER TABLE settings ADD COLUMN aiInstructions TEXT;");
+    } catch (e) {}
+    try {
+      await db.exec("ALTER TABLE settings ADD COLUMN aiFeedbackHistory TEXT;");
+    } catch (e) {}
     
     console.log("SQLite database initialized successfully.");
   }
@@ -152,15 +164,17 @@ export class DbService {
     );
 
     await database.run(
-      `INSERT INTO settings (user_id, openaiKey, geminiKey, linkedinKey, platforms, privacy)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO settings (user_id, openaiKey, geminiKey, linkedinKey, platforms, privacy, aiInstructions, aiFeedbackHistory)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
         "",
         "",
         "",
         JSON.stringify(DEFAULT_SETTINGS.platforms),
-        JSON.stringify(DEFAULT_SETTINGS.privacy)
+        JSON.stringify(DEFAULT_SETTINGS.privacy),
+        DEFAULT_SETTINGS.aiInstructions,
+        JSON.stringify(DEFAULT_SETTINGS.aiFeedbackHistory)
       ]
     );
 
@@ -262,6 +276,8 @@ export class DbService {
       openaiKey: row.openaiKey || "",
       geminiKey: row.geminiKey || "",
       linkedinKey: row.linkedinKey || "",
+      aiInstructions: row.aiInstructions || DEFAULT_SETTINGS.aiInstructions,
+      aiFeedbackHistory: row.aiFeedbackHistory ? JSON.parse(row.aiFeedbackHistory) : DEFAULT_SETTINGS.aiFeedbackHistory,
       platforms: row.platforms ? JSON.parse(row.platforms) : DEFAULT_SETTINGS.platforms,
       privacy: row.privacy ? JSON.parse(row.privacy) : DEFAULT_SETTINGS.privacy
     };
@@ -282,7 +298,9 @@ export class DbService {
         geminiKey = ?,
         linkedinKey = ?,
         platforms = ?,
-        privacy = ?
+        privacy = ?,
+        aiInstructions = ?,
+        aiFeedbackHistory = ?
        WHERE user_id = ?`,
       [
         updated.openaiKey,
@@ -290,6 +308,8 @@ export class DbService {
         updated.linkedinKey,
         JSON.stringify(updated.platforms),
         JSON.stringify(updated.privacy),
+        updated.aiInstructions || "",
+        JSON.stringify(updated.aiFeedbackHistory || []),
         userId
       ]
     );

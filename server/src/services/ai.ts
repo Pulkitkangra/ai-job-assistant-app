@@ -58,15 +58,32 @@ ${text}
     return JSON.parse(result.response.text());
   }
 
-  static async customizeResume(jobTitle: string, company: string, jobDesc: string, originalResumeText: string, userApiKey?: string) {
+  static async customizeResume(
+    jobTitle: string, 
+    company: string, 
+    jobDesc: string, 
+    originalResumeText: string, 
+    userApiKey?: string,
+    aiInstructions?: string,
+    aiFeedbackHistory?: string[]
+  ) {
     const ai = getClient(userApiKey);
     const model = ai.getGenerativeModel({
       model: "gemini-1.5-flash",
       generationConfig: { responseMimeType: "application/json" }
     });
 
+    let personalizationBlock = "";
+    if (aiInstructions) {
+      personalizationBlock += `\n- Follow these custom instructions: ${aiInstructions}`;
+    }
+    if (aiFeedbackHistory && aiFeedbackHistory.length > 0) {
+      personalizationBlock += `\n- Adhere to the following past feedback items from the user:\n${aiFeedbackHistory.map(f => `  * ${f}`).join('\n')}`;
+    }
+
     const prompt = `
 You are an AI resume coach. Analyze the following job description and the user's original resume details.
+${personalizationBlock ? `\nPERSONALIZATION CONSTRAINTS:${personalizationBlock}\n` : ""}
 You need to customize the user's experience bullet points and write a brief summary tailored for this job.
 Optimize for ATS matching, using keywords from the job description naturally, and quantify impacts where possible.
 
@@ -105,8 +122,20 @@ Return a JSON object with this exact structure:
       generationConfig: { responseMimeType: "application/json" }
     });
 
+    const aiInstructions = userProfile.settings?.aiInstructions;
+    const aiFeedbackHistory = userProfile.settings?.aiFeedbackHistory;
+
+    let personalizationBlock = "";
+    if (aiInstructions) {
+      personalizationBlock += `\n- Follow these custom instructions: ${aiInstructions}`;
+    }
+    if (aiFeedbackHistory && aiFeedbackHistory.length > 0) {
+      personalizationBlock += `\n- Adhere to the following past feedback items from the user:\n${aiFeedbackHistory.map(f => `  * ${f}`).join('\n')}`;
+    }
+
     const prompt = `
 You are a career assistant. Generate three personalized outreach drafts for the following job and applicant profile:
+${personalizationBlock ? `\nPERSONALIZATION CONSTRAINTS:${personalizationBlock}\n` : ""}
 
 Job: ${jobTitle} at ${company}
 Job Description:

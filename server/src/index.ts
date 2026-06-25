@@ -87,7 +87,7 @@ app.get('/api/jobs', authMiddleware, async (req: AuthenticatedRequest, res) => {
     if (!profile) {
       return res.status(404).json({ error: "Profile not found" });
     }
-    const jobs = JobService.getMatchedJobs(profile.skills, profile.prefs);
+    const jobs = await JobService.getMatchedJobs(profile.skills, profile.prefs);
     res.json(jobs);
   } catch (e) {
     res.status(500).json({ error: "Failed to get jobs" });
@@ -146,11 +146,47 @@ app.post('/api/resume/customize', authMiddleware, async (req: AuthenticatedReque
       `Role: ${e.role} at ${e.co} (${e.period})\nDescription: ${e.desc}`
     ).join('\n\n');
 
-    const customized = await AiService.customizeResume(jobTitle, company, jobDesc, expText, apiKey);
+    const customized = await AiService.customizeResume(
+      jobTitle, 
+      company, 
+      jobDesc, 
+      expText, 
+      apiKey,
+      profile.settings?.aiInstructions,
+      profile.settings?.aiFeedbackHistory
+    );
     res.json(customized);
   } catch (e: any) {
     console.error("Resume customization error:", e);
     res.status(500).json({ error: e.message || "Failed to customize resume" });
+  }
+});
+
+// Endpoint to append learned behavioral feedback
+app.post('/api/settings/feedback', authMiddleware, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { feedback } = req.body;
+    if (!feedback || typeof feedback !== 'string' || feedback.trim() === '') {
+      return res.status(400).json({ error: "Feedback must be a non-empty string" });
+    }
+
+    const userId = req.user!.id;
+    const settings = await DbService.getSettings(userId);
+    if (!settings) {
+      return res.status(404).json({ error: "Settings not found" });
+    }
+
+    const history = settings.aiFeedbackHistory || [];
+    history.push(feedback.trim());
+    if (history.length > 15) {
+      history.shift();
+    }
+
+    await DbService.saveSettings(userId, { ...settings, aiFeedbackHistory: history });
+    res.json({ success: true, aiFeedbackHistory: history });
+  } catch (e) {
+    console.error("Save settings feedback error:", e);
+    res.status(500).json({ error: "Failed to save feedback" });
   }
 });
 
@@ -181,7 +217,7 @@ app.get('/api/improve/roadmap', authMiddleware, async (req: AuthenticatedRequest
     if (!profile) {
       return res.status(404).json({ error: "Profile not found" });
     }
-    const jobs = JobService.getMatchedJobs(profile.skills, profile.prefs);
+    const jobs = await JobService.getMatchedJobs(profile.skills, profile.prefs);
     const roadmap = JobService.getSkillsRoadmap(profile.skills, jobs);
     
     // Add default weekly insights

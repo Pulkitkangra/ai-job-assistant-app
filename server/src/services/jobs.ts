@@ -30,36 +30,132 @@ const JOB_POOL: Job[] = [
   { id: 15, title: "Software Engineer", company: "Unacademy", location: "Remote", remote: "Remote", stipend: "₹60K/mo", platform: "Naukri", posted: "4d ago", skills: ["Node.js", "React", "PostgreSQL", "Redis"], desc: "Work on live learning platform APIs and streaming services.", sector: "EdTech" }
 ];
 
+function getCountryCode(location: string = ""): string {
+  const loc = location.toLowerCase();
+  if (loc.includes("united states") || loc.includes("usa") || loc.includes("us")) return "us";
+  if (loc.includes("united kingdom") || loc.includes("uk") || loc.includes("london") || loc.includes("gb")) return "gb";
+  if (loc.includes("canada") || loc.includes("ca")) return "ca";
+  return "in";
+}
+
 export class JobService {
-  static getMatchedJobs(userSkills: string[], userPrefs?: any) {
+  static async getMatchedJobs(userSkills: string[], userPrefs?: any) {
+    const appId = process.env.ADZUNA_APP_ID;
+    const appKey = process.env.ADZUNA_APP_KEY;
+
+    let jobs: Job[] = [];
+
+    if (appId && appKey) {
+      try {
+        const query = userPrefs?.roles?.[0] || "Software Engineer";
+        const location = userPrefs?.locations?.[0] || "India";
+        const country = getCountryCode(location);
+
+        const url = `https://api.adzuna.com/v1/api/jobs/${country}/search/1?app_id=${appId}&app_key=${appKey}&what=${encodeURIComponent(query)}&where=${encodeURIComponent(location)}&content_type=application/json&results_per_page=15`;
+        
+        console.log(`Fetching jobs from Adzuna: ${url}`);
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.results && data.results.length > 0) {
+            jobs = data.results.map((j: any, index: number) => {
+              const isUS = country === "us";
+              const isUK = country === "gb";
+              const currency = isUS ? "$" : isUK ? "£" : "₹";
+              
+              let stipend = "Not disclosed";
+              if (j.salary_min) {
+                const monthly = Math.round(j.salary_min / 12);
+                if (monthly > 1000) {
+                  stipend = `${currency}${Math.round(monthly / 1000)}K/mo`;
+                } else {
+                  stipend = `${currency}${monthly}/mo`;
+                }
+              } else {
+                stipend = country === "in" ? "₹50K - ₹80K/mo" : "$4K - $6K/mo";
+              }
+
+              let remoteVal: 'Remote' | 'On-site' | 'Hybrid' = 'On-site';
+              const titleLower = j.title.toLowerCase();
+              const descLower = (j.description || "").toLowerCase();
+              if (titleLower.includes("remote") || descLower.includes("work from home") || descLower.includes("remote ok")) {
+                remoteVal = 'Remote';
+              } else if (titleLower.includes("hybrid") || descLower.includes("hybrid work")) {
+                remoteVal = 'Hybrid';
+              }
+
+              const techSkills = [
+                "Python", "React", "Node.js", "TypeScript", "JavaScript", 
+                "PostgreSQL", "MongoDB", "MySQL", "Redis", "FastAPI", 
+                "Docker", "Kubernetes", "AWS", "Google Cloud", "PyTorch", 
+                "TensorFlow", "Java", "C++", "C#", "Go", "Git", "Machine Learning",
+                "Deep Learning", "HTML", "CSS", "TailwindCSS", "SQL"
+              ];
+              
+              const requiredSkills: string[] = [];
+              const combinedText = `${j.title} ${j.description || ""}`;
+              techSkills.forEach(skill => {
+                const regex = new RegExp(`\\b${skill.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+                if (regex.test(combinedText)) {
+                  requiredSkills.push(skill);
+                }
+              });
+
+              if (requiredSkills.length === 0) {
+                requiredSkills.push("Software Engineering", "Problem Solving");
+              }
+
+              return {
+                id: index + 100,
+                title: j.title,
+                company: j.company?.display_name || "Unknown Company",
+                location: j.location?.display_name || location,
+                remote: remoteVal,
+                stipend: stipend,
+                platform: "Adzuna",
+                posted: "Recently",
+                skills: requiredSkills,
+                desc: j.description || "No description provided.",
+                sector: j.category?.label || "Technology"
+              };
+            });
+          }
+        } else {
+          console.warn(`Adzuna API responded with error status: ${response.status}`);
+        }
+      } catch (e) {
+        console.error("Adzuna API Fetch failed:", e);
+      }
+    }
+
+    if (jobs.length === 0) {
+      console.log("No live jobs fetched from Adzuna. Using local fallback JOB_POOL.");
+      jobs = JOB_POOL;
+    }
+
     const skillsLower = userSkills.map(s => s.toLowerCase());
 
-    const matchedJobs = JOB_POOL.map(job => {
+    const matchedJobs = jobs.map(job => {
       const jobSkillsLower = job.skills.map(s => s.toLowerCase());
       
-      // Calculate matching and missing skills
       const matchingSkills = job.skills.filter(s => skillsLower.includes(s.toLowerCase()));
       const missingSkills = job.skills.filter(s => !skillsLower.includes(s.toLowerCase()));
       
-      // Base match score: ratio of matching skills
       let score = 0;
       if (job.skills.length > 0) {
         score = Math.round((matchingSkills.length / job.skills.length) * 100);
       }
 
-      // Preference boosts
       if (userPrefs) {
-        // Boost for preferred roles
         if (userPrefs.roles && userPrefs.roles.some((r: string) => job.title.toLowerCase().includes(r.toLowerCase()))) {
           score += 5;
         }
-        // Boost for preferred location
         if (userPrefs.locations && userPrefs.locations.some((l: string) => job.location.toLowerCase().includes(l.toLowerCase()) || (l.toLowerCase() === 'remote' && job.remote === 'Remote'))) {
           score += 5;
         }
       }
 
-      // Clamp score between 10 and 99
       score = Math.max(10, Math.min(99, score));
 
       return {
@@ -79,7 +175,6 @@ export class JobService {
       };
     });
 
-    // Sort by match score descending
     return matchedJobs.sort((a, b) => b.match - a.match);
   }
 
